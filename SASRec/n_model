@@ -1,0 +1,22 @@
+import numpy as np
+import torch.nn as nn
+
+
+class PointWiseFeedForward(nn.Module):
+    def __init__(self, hidden_units, dropout_rate):
+        super(PointWiseFeedForward, self).__init__()
+
+        self.conv = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.relu = nn.ReLU()
+
+    def forward(self, inputs):
+        outputs = self.dropout(self.conv(self.relu(self.dropout(self.conv(inputs.transpose(-1, -2))))))
+        outputs = outputs.transpose(-1, -2)
+        outputs += inputs
+        return outputs
+
+
+class SASRec(nn.Module):
+    def __init__(self, user_num, item_num):
+        super(SASRec, self).__init__()
