@@ -3,6 +3,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 from config import args
 from model import SASRec
@@ -54,13 +55,13 @@ class SeqRecDataset(Dataset):
     def __getitem__(self, idx):
         user = idx + 1
         train = self.user_train[user]
-        
+
         seq = np.zeros([args.maxlen], dtype=np.int32)
         pos = np.zeros([args.maxlen], dtype=np.int32)
         neg = np.zeros([args.maxlen], dtype=np.int32)
         next_item = train[-1]
         index = args.maxlen - 1
-        
+
         user_interacted_items = set(train)
         for i in reversed(train[:-1]):
             seq[index] = i
@@ -72,11 +73,7 @@ class SeqRecDataset(Dataset):
             if index == -1:
                 break
 
-        return (
-            torch.LongTensor(seq),
-            torch.LongTensor(pos),
-            torch.LongTensor(neg)
-            )
+        return (torch.LongTensor([user]), torch.LongTensor(seq), torch.LongTensor(pos), torch.LongTensor(neg))
 
     # def collate_fn(self, batch):
     #     input_sequence = []
@@ -104,6 +101,7 @@ class SeqRecDataset(Dataset):
             negative_samples.append(negative)
         return negative_samples
 
+
 dataset = SeqRecDataset(user_train, user_valid, user_test, usernum, itemnum)
 dataLoader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False)
 
@@ -125,12 +123,12 @@ model.train()
 
 for epoch in range(args.num_epochs):
     total_loss = 0
-    for batch_idx, (sequence, positive, negative) in enumerate(dataLoader):
+    for batch_idx, (user, sequence, positive, negative) in enumerate(tqdm(dataLoader)):
         sequence = sequence.to(args.device)
         positive = positive.to(args.device)
         negative = negative.to(args.device)
 
-        pos_score, neg_score = model(user_train, sequence, positive, negative)
+        pos_score, neg_score = model(user, sequence, positive, negative)
 
         pos_labels = torch.ones_like(pos_score)  # Positive labels (1)
         neg_labels = torch.zeros_like(neg_score)  # Negative labels (0)
@@ -141,6 +139,6 @@ for epoch in range(args.num_epochs):
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item()
+        total_loss += loss.item() / len(dataLoader)
 
-        print(f"Epoch {epoch + 1}/{args.num_epochs}, Loss: {total_loss:.4f}")
+    print(f"Epoch {epoch + 1}/{args.num_epochs}, Loss: {total_loss:.4f}")
